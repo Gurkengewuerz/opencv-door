@@ -1,3 +1,4 @@
 images/*/
 trainings/*.pickle
 trainings/*.yml
+__pycache__/
