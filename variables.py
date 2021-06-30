@@ -15,3 +15,6 @@ trainings_dir = os.path.join(BASE_DIR, "trainings")
 namePickle = os.path.join(trainings_dir, "names.pickle")
 
 trainingFile = os.path.join(trainings_dir, "trainingData.yml")
+
+PUSHOVER_API_KEY = ""
+PUSHOVER_USER_KEY = ""

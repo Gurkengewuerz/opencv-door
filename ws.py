@@ -1,19 +1,24 @@
 from imutils.video import VideoStream
-from flask import Flask, Response, render_template_string
+from flask import Flask, Response, render_template_string, render_template
+from gpiozero import LED
 import threading
+import requests
 import argparse
 import pickle
 import imutils
 import time
 import cv2
+import csv
 
 from variables import *
+
+led = LED(17)
 
 outputFrame = None
 lock = threading.Lock()
 app = Flask(__name__)
-#vs = VideoStream(usePiCamera=1).start()
-vs = VideoStream(src=0).start()
+vs = VideoStream(usePiCamera=1).start()
+#vs = VideoStream(src=0).start()
 time.sleep(1.0)
 
 recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -22,31 +27,24 @@ recognizer_names = []
 
 @app.route("/")
 def index():
-    return render_template_string("""
-<html>
-  <head>
-    <title>OpenCV Door</title>
-    <style>
-    div {
-        height: 100%;
-        position: relative;
-    }
+    return render_template('index.html')
 
-    img {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-    }
-    </style>
-  </head>
-  <body style="background-color: #191919;">
-    <div>
-        <img src="{{ url_for('video_feed') }}">
-    </div>
-  </body>
-</html>
-    """)
+def log(data):
+    with open("log.csv", "a", newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow([str(int(time.time()))] + data)
+
+def uploadImage(frame):
+    print("Pushing image to pushover")
+    r = requests.post("https://api.pushover.net/1/messages.json", data = {
+        "token": PUSHOVER_API_KEY,
+        "user": PUSHOVER_USER_KEY,
+        "message": "Unbekannter Zutritt"
+    },
+    files = {
+        "attachment": ("image.jpg",  cv2.imencode('.jpg', frame)[1].tobytes(), "image/jpeg")
+    })
+    print(r.text)
 
 def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
     global vs, outputFrame, lock, face_cascade, recognizer, recognizer_names
@@ -54,14 +52,18 @@ def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
     matchList = {}
     successStarted = 0
     facesIsZero = 0
+    logged = False
+    lastPush = 0
 
     while True:
         frame = vs.read()
+        origFrame = frame
         frame = imutils.resize(frame, width=800)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)    
 
         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.5, minNeighbors=5)
-
+        
+        noMatch = False
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 3)
             id_, conf = recognizer.predict(gray[y:y+h, x:x+w])
@@ -75,9 +77,11 @@ def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
                     matchList[label] = {"last": time.time(), "start": startedAt}
                 else:
                     matchList[label] = {"last": time.time(), "start": time.time()}
+                    logged = False
 
             else:
                 facesIsZero = facesIsZero + 1
+                noMatch = True
                 cv2.putText(frame, "No Match", (x+2, y+h-5), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         
         if len(faces) == 0:
@@ -85,6 +89,12 @@ def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
         
         if facesIsZero >= 500 // wait_time:
             matchList.clear()
+
+        if noMatch and facesIsZero >= (1000 // wait_time) and time.time() - lastPush > 60:
+            lastPush = time.time()
+            log(["unknown", "RING"])
+            thread = threading.Thread(target = uploadImage, args = (origFrame, ))
+            thread.start()
 
         for val in matchList.values():
             t = time.time()
@@ -94,8 +104,13 @@ def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
         
         if time.time() - successStarted < access_time:
             cv2.putText(frame, "ACCESS GRANTED", (0, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 204, 0), thickness=2)
+            led.on()
+            if not logged:
+                log([",".join(matchList.keys()), "GRANTED"])
+                logged = True
         else:
             successStarted = 0
+            led.off()
         
         with lock:
             outputFrame = frame.copy()

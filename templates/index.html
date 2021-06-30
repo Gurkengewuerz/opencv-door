@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <title>lookover</title>
+    <style>
+    div {
+        height: 100%;
+        position: relative;
+    }
+
+    img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    </style>
+  </head>
+  <body style="background-color: #191919;">
+    <div>
+        <img src="{{ url_for('video_feed') }}">
+    </div>
+  </body>
+</html>

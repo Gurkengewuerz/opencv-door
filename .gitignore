@@ -2,3 +2,4 @@ images/*/
 trainings/*.pickle
 trainings/*.yml
 __pycache__/
+log.csv
