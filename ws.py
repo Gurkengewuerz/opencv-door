@@ -49,7 +49,7 @@ def log(data):
         writer = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         writer.writerow([str(int(time.time()))] + data)
 
-def uploadImage(frame):
+def uploadImage(label, frame):
     if PUSHOVER_API_KEY == "" or PUSHOVER_USER_KEY == "":
         print("Skipping pushover")
         return
@@ -57,7 +57,7 @@ def uploadImage(frame):
     r = requests.post("https://api.pushover.net/1/messages.json", data = {
         "token": PUSHOVER_API_KEY,
         "user": PUSHOVER_USER_KEY,
-        "message": "Unbekannter Zutritt"
+        "message": "Es steht jemand vor deiner Tür" if label == "no_match" else "{} steht vor deiner Tür".format(label)
     },
     files = {
         "attachment": ("image.jpg",  frame, "image/jpeg")
@@ -66,7 +66,7 @@ def uploadImage(frame):
 
 def push(label, frame):
     lastPush[label] = time.time()
-    thread = threading.Thread(target = uploadImage, args = (frame, ))
+    thread = threading.Thread(target = uploadImage, args = (label, frame, ))
     thread.start()
 
 def do_cv(needed_face_time = 3, access_time = 5, wait_time = 20):
