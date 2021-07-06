@@ -73,7 +73,7 @@ if args["train"]:
                 label = os.path.basename(root).replace(" ", "-").lower()
 
                 faceImg = Image.open(path).convert("L")
-                faceNp = np.array(faceImg, "uint8")
+                faceNp = np.array(faceImg)
                 faces.append(faceNp)
                 ids.append(total)
                 names.append(label)
