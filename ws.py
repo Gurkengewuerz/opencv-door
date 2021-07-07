@@ -1,5 +1,5 @@
 from imutils.video import VideoStream
-from flask import Flask, Response, render_template_string, render_template
+from flask import Flask, Response, render_template_string, render_template, request
 from gpiozero import LED
 import threading
 import requests
@@ -10,6 +10,7 @@ import base64
 import time
 import cv2
 import csv
+import sys
 
 from variables import *
 
@@ -20,6 +21,7 @@ lock = threading.Lock()
 app = Flask(__name__)
 vs = VideoStream(src=0).start()
 time.sleep(1.0)
+csv.field_size_limit(100000000)
 
 recognizer = cv2.face.LBPHFaceRecognizer_create()
 recognizer_names = []
@@ -30,19 +32,43 @@ lastPush = {"no_match": 0}
 lastLog = {"no_match": 0}
 
 
+@app.template_filter("ctime")
+def timectime(s):
+    return time.ctime(int(s))
+
+@app.template_filter("split")
+def split(s):
+    return s.split(",")
+
 @app.route("/")
 def index():
     return render_template('index.html')
 
 @app.route("/log")
 def log_page():
-    with open("log.csv", "a", newline='') as csvfile:
+    with open("log.csv", "r", newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
         return render_template('log.html', log_entries=reader)
 
 @app.route("/permissions")
 def permissions_page():
     return render_template('permissions.html', permissions=permissions)
+
+@app.route("/permissions", methods=['DELETE'])
+def permissions_page_del():
+    global permissions
+    content = request.json
+    newPerms = []
+    with open("permissions.csv", "w", newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for perms in permissions:
+            if perms[0] == content["name"]:
+                continue
+            newPerms.append(perms)
+            writer.writerow(perms)
+    permissions = newPerms
+    return "ok"
 
 def log(data):
     with open("log.csv", "a", newline='') as csvfile:
